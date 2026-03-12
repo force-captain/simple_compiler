@@ -6,8 +6,8 @@
 type var = string
 
 type datatype = 
-    | Int
-    | Bool
+    | TInt
+    | TBool
 
 type binop = 
     | Add 
@@ -23,7 +23,9 @@ type binop =
     | Equal 
     | Nequal
 
-type unop = Neg
+type unop = 
+    | Neg 
+    | Not
 
 type expr = 
     | Int of int
@@ -32,6 +34,7 @@ type expr =
     | Binop of binop * expr * expr
     | Unop of unop * expr
     | Assign of string * expr
+    | App of var * expr list
 
 type arg = Arg of datatype * var
 

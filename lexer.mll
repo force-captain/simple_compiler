@@ -12,7 +12,7 @@ let next_line lexbuf =
 
 }
 
-let newline = ('\010' | "\013\010" )
+let newline = ( '\n' | "\r\n" )
 let ident_reg_exp = ['A'-'Z' 'a'-'z' '_']+ ['0'-'9' 'A'-'Z' 'a'-'z' '_']* 
 let int_reg_exp = ['0'-'9']+
 
@@ -30,8 +30,12 @@ let int_reg_exp = ['0'-'9']+
       | "int"           { INT_KWORD }
       | "bool"          { BOOL_KWORD }
       | "return"        { RETURN }
-      | '='             { ASSIGN }
+      | "true"          { BOOL true }
+      | "false"         { BOOL false }
+      | "=="            { EQUAL }
+      | "!="            { NEQUAL }
       | "<="            { LE }
+      | ","             { COMMA }
       | ">="            { GE }
       | '<'             { LT }
       | '>'             { GT }
@@ -40,6 +44,7 @@ let int_reg_exp = ['0'-'9']+
       | '{'             { LBRACE }
       | '}'             { RBRACE }
       | ';'             { SEMICOLON }
+      | '='             { ASSIGN }
       | "/*"            { comment lexbuf; token lexbuf }
       | eof             { EOF }
       | int_reg_exp     { INT (int_of_string (Lexing.lexeme lexbuf)) }

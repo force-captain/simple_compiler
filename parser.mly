@@ -11,6 +11,7 @@
 %token ASSIGN
 
 %token SEMICOLON
+%token COMMA
 %token RETURN
 %token IF ELSE
 
@@ -46,21 +47,28 @@
 %type <Past.block> block
 %type <Past.func> func
 %type <Past.block> main
+%type <Past.datatype> datatype
+%type <Past.arg list> args_tail
+%type <Past.arg list> args
+%type <Past.expr list> app_args
+%type <Past.expr list> app_args_tail
 
 %%
+
 main:
     block EOF            { $1 }
 ;
 
 datatype:
-        | INT_KWORD
-        | BOOL_KWORD
+        | INT_KWORD         { Past.TInt }
+        | BOOL_KWORD        { Past.TBool }
 ;
 
 value:
         | INT                   { Past.Int $1 }
         | BOOL                  { Past.Bool $1 }
         | IDENT                 { Past.Ident $1 }
+        | IDENT LPAREN app_args RPAREN { Past.App($1, $3) }
         | LPAREN expr RPAREN    { $2 }
 ;
 
@@ -70,25 +78,27 @@ return:
 ;
 
 expr:
-        | value                 { $1 }
-        | UMINUS      expr      { Past.Unop(Neg,         $2) }
-        | expr ADD    expr      { Past.Binop(Add,    $1, $3) }
-        | expr SUB    expr      { Past.Binop(Sub,    $1, $3) }
-        | expr MUL    expr      { Past.Binop(Mul,    $1, $3) }
-        | expr DIV    expr      { Past.Binop(Div,    $1, $3) }
-        | expr LT     expr      { Past.Binop(Lt,     $1, $3) }
-        | expr GT     expr      { Past.Binop(Gt,     $1, $3) }
-        | expr LE     expr      { Past.Binop(Le,     $1, $3) }
-        | expr GE     expr      { Past.Binop(Ge,     $1, $3) }
-        | expr LOR    expr      { Past.Binop(Lor,    $1, $3) } 
-        | expr LAND   expr      { Past.Binop(Land,   $1, $3) }
-        | expr EQUAL  expr      { Past.Binop(Equal,  $1, $3) }
-        | expr NEQUAL expr      { Past.Binop(Nequal, $1, $3) }
+        | value                             { $1 }
+        | SUB expr %prec UMINUS             { Past.Unop(Neg,         $2) }
+        | LNOT expr                         { Past.Unop(Lnot,        $2) }
+        | expr ADD    expr                  { Past.Binop(Add,    $1, $3) }
+        | expr SUB    expr                  { Past.Binop(Sub,    $1, $3) }
+        | expr MUL    expr                  { Past.Binop(Mul,    $1, $3) }
+        | expr DIV    expr                  { Past.Binop(Div,    $1, $3) }
+        | expr LT     expr                  { Past.Binop(Lt,     $1, $3) }
+        | expr GT     expr                  { Past.Binop(Gt,     $1, $3) }
+        | expr LE     expr                  { Past.Binop(Le,     $1, $3) }
+        | expr GE     expr                  { Past.Binop(Ge,     $1, $3) }
+        | expr LOR    expr                  { Past.Binop(Lor,    $1, $3) } 
+        | expr LAND   expr                  { Past.Binop(Land,   $1, $3) }
+        | expr EQUAL  expr                  { Past.Binop(Equal,  $1, $3) }
+        | expr NEQUAL expr                  { Past.Binop(Nequal, $1, $3) }
+        | IDENT ASSIGN expr %prec ASSIGN    { Past.Assign($1, $3) }
 ;
 
 block:
         | stmt block            { $1 :: $2 }
-        | stmt                  { [$1] }
+        | /* empty */           { [] }
 ;
 
 ifstmt:
@@ -107,21 +117,36 @@ stmt:
 ;
 
 decl:
-        | datatype IDENT                    { Past.Decl(
-            (match $1 with INT_KWORD -> Int | BOOL_KWORD -> Bool), $2, None) }
-        | datatype IDENT ASSIGN expr        { Past.Decl(
-            (match $1 with INT_KWORD -> Int | BOOL_KWORD -> Bool), $2, Some($4)) }
+        | datatype IDENT                    { Past.Decl($1, $2, None) }
+        | datatype IDENT ASSIGN expr        { Past.Decl($1, $2, Some($4)) }
+;
 
 args:
-        | datatype IDENT args           { Past.Arg((match $1 with BOOL_KWORD -> Bool | INT_KWORD -> Int), $2) :: $3 }
-        | /* empty */                   { [] }
+        | datatype IDENT args_tail              { Past.Arg($1, $2) :: $3 }
+        | /* empty */                           { [] }
+;
+
+args_tail:
+        | COMMA datatype IDENT args_tail        { Past.Arg($2, $3) :: $4 }
+        | /* empty */                           { [] }
+;
+
+app_args:
+        | expr app_args_tail                   { $1 :: $2 }
+        | /* empty */                           { [] }
+;
+
+app_args_tail:
+        | COMMA expr app_args_tail             { $2 :: $3 }
+        | /* empty */                           { [] }
+;
 
 func:
         | datatype IDENT LPAREN args RPAREN LBRACE block RBRACE
             { Func {
                 name = $2; 
                 args = $4;
-                return_type = (match $1 with INT_KWORD -> Int | BOOL_KWORD -> Bool);
+                return_type = $1;
                 body = $7 
             } }
 ;
