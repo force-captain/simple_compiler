@@ -8,6 +8,11 @@
 *.cmxs
 *.cmxa
 
+# Generated files 
+parser.ml 
+parser.mli 
+lexer.ml
+
 # Files containing detailed information about the compilation (generated
 # by `ocamlc`/`ocamlopt` when invoked using the option `-bin-annot`).
 # These files are typically useful for code inspection tools
