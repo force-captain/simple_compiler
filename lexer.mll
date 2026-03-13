@@ -9,8 +9,8 @@ let next_line lexbuf =
         { pos with pos_bol = lexbuf.lex_curr_pos;
                    pos_lnum = pos.pos_lnum + 1
         }
-
 }
+
 
 let newline = ( '\n' | "\r\n" )
 let ident_reg_exp = ['A'-'Z' 'a'-'z' '_']+ ['0'-'9' 'A'-'Z' 'a'-'z' '_']* 
@@ -34,6 +34,7 @@ let int_reg_exp = ['0'-'9']+
       | "false"         { BOOL false }
       | "=="            { EQUAL }
       | "!="            { NEQUAL }
+      | '!'             { LNOT }
       | "<="            { LE }
       | ","             { COMMA }
       | ">="            { GE }
