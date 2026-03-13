@@ -5,7 +5,7 @@ open Lexing
 let error file action s = 
     Errors.complain ("\nERROR in " ^ file ^ " with " ^ action ^ " : " ^ s ^ "\n") 
 
-let peek m e pp = if Option.verbose_front then print_string (m ^ ":\n" ^ (if Option.verbose_tree then Pptree.pp_no_bracket else (fun x -> x)) (pp e)  ^ "\n") else () 
+(*let peek m e pp = if Option.verbose_front then print_string (m ^ ":\n" ^ (if Option.verbose_tree then Pptree.pp_no_bracket else (fun x -> x)) (pp e)  ^ "\n") else () *)
 
 let parse_error file lexbuf = 
     let pos = lexbuf.lex_curr_p in 
@@ -25,20 +25,20 @@ let init_lexbuf file =
 let parse (file, lexbuf) = 
     let e = try Parser.main Lexer.token lexbuf 
             with Parsing.Parse_error -> parse_error file lexbuf 
-    in let _ = peek "Parsed result" e Past.string_of_block 
+    (*in let _ = peek "Parsed result" e Past.string_of_block *)
     in (file, e) 
 
  (* perform static checks *) 
 let check (file, e) = 
     let e' = try Static.check_program e 
              with Errors.Error s -> error file "static check" s 
-    in let _ = peek "After static checks" e' Past.string_of_block 
+    (*in let _ = peek "After static checks" e' Past.string_of_block *)
     in e' 
 	
 (* translate from Past.expr to Ast.expr *) 
 let translate e = 
     let e' = Past_to_ast.translate_block e
-    in let _ = peek "After translation" e' Ast.string_of_expr 
+    (*in let _ = peek "After translation" e' Ast.string_of_expr *)
     in e' 
 
 (* the front end *)  
