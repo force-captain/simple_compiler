@@ -2,32 +2,33 @@ type var = string
 
 type datatype = 
     | TInt 
-    | TBool
+    | TBool 
     | TUnit
 
-type bop = 
+type bop =
     | Add
     | Sub
     | Mul
     | Div
-    | Or
-    | And
-    | Lt
     | Gt
-    | Le
+    | Lt
     | Ge
+    | Le
+    | And
+    | Or
     | Equal
     | Nequal
 
 type uop = Neg | Not
 
+
 type expr = 
     | Int of int * datatype
     | Bool of bool * datatype
-    | Ident of var * datatype 
-    | BinaryOp of bop * expr * expr * datatype 
-    | UnaryOp of uop * expr * datatype 
-    | Assign of var * expr * datatype 
+    | Ident of var * datatype
+    | BinaryOp of bop * expr * expr * datatype
+    | UnaryOp of uop * expr * datatype
+    | Assign of var * expr * datatype
     | App of var * (expr list) * datatype
 
 type arg = Arg of var * datatype
@@ -48,3 +49,8 @@ and func = {
 }
 
 
+val string_of_bop : bop -> string 
+val string_of_uop : uop -> string 
+
+val print_stmt : stmt -> unit 
+val print_block : block -> unit

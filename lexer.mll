@@ -29,6 +29,7 @@ let int_reg_exp = ['0'-'9']+
       | "else"          { ELSE }
       | "int"           { INT_KWORD }
       | "bool"          { BOOL_KWORD }
+      | "void"          { UNIT_KWORD }
       | "return"        { RETURN }
       | "true"          { BOOL true }
       | "false"         { BOOL false }

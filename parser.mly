@@ -1,11 +1,13 @@
 %{
-    open Ast
+
+let get_loc = Parsing.symbol_start_pos
+
 %}
 
 %token <int> INT
 %token <string> IDENT
 %token <bool> BOOL
-%token INT_KWORD BOOL_KWORD 
+%token INT_KWORD BOOL_KWORD UNIT_KWORD
 %token ASSIGN
 
 %token SEMICOLON
@@ -13,7 +15,7 @@
 %token RETURN
 %token IF ELSE
 
-%token LOR LAND
+%token LOR LAND LNOT
 
 %token EQUAL NEQUAL
 %token LT LE GT GE
@@ -36,19 +38,20 @@
 %nonassoc ELSE
 
 %start main
-%type <Ast.expr> expr
-%type <Ast.expr> value
-%type <Ast.stmt> stmt
-%type <Ast.stmt> ifstmt
-%type <Ast.stmt> return
-%type <Ast.block> block
-%type <Ast.func> func
-%type <Ast.block> main
-%type <Ast.datatype> datatype
-%type <Ast.arg list> args_tail
-%type <Ast.arg list> args
-%type <Ast.expr list> app_args
-%type <Ast.expr list> app_args_tail
+%type <Past.expr> expr
+%type <Past.expr> value
+%type <Past.stmt> stmt
+%type <Past.stmt> ifstmt
+%type <Past.stmt> ret
+%type <Past.block> block
+%type <Past.func> func
+%type <Past.block> main
+%type <Past.datatype> datatype
+%type <Past.arg list> args_tail
+%type <Past.arg list> args
+%type <Past.expr list> app_args
+%type <Past.expr list> app_args_tail
+%type <Past.datatype> datatype_ex
 
 %%
 
@@ -56,41 +59,46 @@ main:
     block EOF            { $1 }
 ;
 
+datatype_ex:
+        | INT_KWORD         { Past.IntType }
+        | BOOL_KWORD        { Past.BoolType }
+;
+
 datatype:
-        | INT_KWORD         { Ast.TInt }
-        | BOOL_KWORD        { Ast.TBool }
+        | datatype_ex       { $1 }
+        | UNIT_KWORD        { Past.UnitType }
 ;
 
 value:
-        | INT                   { Ast.Int $1 }
-        | BOOL                  { Ast.Bool $1 }
-        | IDENT                 { Ast.Ident $1 }
-        | IDENT LPAREN app_args RPAREN { Ast.App($1, $3) }
+        | INT                   { Past.Int (get_loc(), $1) }
+        | BOOL                  { Past.Bool (get_loc(), $1) }
+        | IDENT                 { Past.Ident (get_loc(), $1) }
+        | IDENT LPAREN app_args RPAREN { Past.App(get_loc(), $1, $3) }
         | LPAREN expr RPAREN    { $2 }
 ;
 
-return:
-        | RETURN                { Ast.Return None }
-        | RETURN expr           { Ast.Return (Some $2) }
+ret:
+        | RETURN                { Past.Return (get_loc(), None) }
+        | RETURN expr           { Past.Return (get_loc(), (Some $2)) }
 ;
 
 expr:
         | value                             { $1 }
-        | SUB expr %prec UMINUS             { Ast.Unop(Neg,         $2) }
-        | LNOT expr                         { Ast.Unop(Lnot,        $2) }
-        | expr ADD    expr                  { Ast.Binop(Add,    $1, $3) }
-        | expr SUB    expr                  { Ast.Binop(Sub,    $1, $3) }
-        | expr MUL    expr                  { Ast.Binop(Mul,    $1, $3) }
-        | expr DIV    expr                  { Ast.Binop(Div,    $1, $3) }
-        | expr LT     expr                  { Ast.Binop(Lt,     $1, $3) }
-        | expr GT     expr                  { Ast.Binop(Gt,     $1, $3) }
-        | expr LE     expr                  { Ast.Binop(Le,     $1, $3) }
-        | expr GE     expr                  { Ast.Binop(Ge,     $1, $3) }
-        | expr LOR    expr                  { Ast.Binop(Lor,    $1, $3) } 
-        | expr LAND   expr                  { Ast.Binop(Land,   $1, $3) }
-        | expr EQUAL  expr                  { Ast.Binop(Equal,  $1, $3) }
-        | expr NEQUAL expr                  { Ast.Binop(Nequal, $1, $3) }
-        | IDENT ASSIGN expr %prec ASSIGN    { Ast.Assign($1, $3) }
+        | SUB expr %prec UMINUS             { Past.Unop(get_loc(), Neg,         $2) }
+        | LNOT expr                         { Past.Unop(get_loc(), Not,         $2) }
+        | expr ADD    expr                  { Past.Binop(get_loc(), Add,    $1, $3) }
+        | expr SUB    expr                  { Past.Binop(get_loc(), Sub,    $1, $3) }
+        | expr MUL    expr                  { Past.Binop(get_loc(), Mul,    $1, $3) }
+        | expr DIV    expr                  { Past.Binop(get_loc(), Div,    $1, $3) }
+        | expr LT     expr                  { Past.Binop(get_loc(), Lt,     $1, $3) }
+        | expr GT     expr                  { Past.Binop(get_loc(), Gt,     $1, $3) }
+        | expr LE     expr                  { Past.Binop(get_loc(), Le,     $1, $3) }
+        | expr GE     expr                  { Past.Binop(get_loc(), Ge,     $1, $3) }
+        | expr LOR    expr                  { Past.Binop(get_loc(), Lor,    $1, $3) } 
+        | expr LAND   expr                  { Past.Binop(get_loc(), Land,   $1, $3) }
+        | expr EQUAL  expr                  { Past.Binop(get_loc(), Equal,  $1, $3) }
+        | expr NEQUAL expr                  { Past.Binop(get_loc(), Nequal, $1, $3) }
+        | IDENT ASSIGN expr %prec ASSIGN    { Past.Assign(get_loc(), $1, $3) }
 ;
 
 block:
@@ -100,47 +108,48 @@ block:
 
 ifstmt:
         | IF LPAREN expr RPAREN LBRACE block RBRACE
-            { Ast.If($3, $6, None) }
-        | IF LPAREN expr RPAREN LBRACE block RBRACE ELSE LBRACE block RBRACE
-            { Ast.If($3, $6, Some $10) }
+            { Past.If(get_loc(), $3, $6, None) }
+        | IF LPAREN expr RPAREN LBRACE block RBRACE ELSE LBRACE block RBRACE %prec ELSE
+            { Past.If(get_loc(), $3, $6, Some $10) }
 ;
 
 stmt:
-        | expr SEMICOLON        { Ast.Expr $1 }
+        | expr SEMICOLON        { Past.Expr (get_loc(), $1) }
         | decl SEMICOLON        { $1 }
-        | return SEMICOLON      { $1 }
+        | ret SEMICOLON         { $1 }
         | ifstmt                { $1 }
-        | func                  { $1 }
+        | func                  { Past.Func (get_loc(), $1) }
 ;
 
 decl:
-        | datatype IDENT                    { Ast.Decl($1, $2, None) }
-        | datatype IDENT ASSIGN expr        { Ast.Decl($1, $2, Some($4)) }
+        | datatype_ex IDENT                    { Past.Decl(get_loc(), $1, $2, None) }
+        | datatype_ex IDENT ASSIGN expr        { Past.Decl(get_loc(), $1, $2, Some($4)) }
 ;
 
+
 args:
-        | datatype IDENT args_tail              { Ast.Arg($1, $2) :: $3 }
         | /* empty */                           { [] }
+        | datatype_ex IDENT args_tail           { Past.Arg($1, $2) :: $3 }
 ;
 
 args_tail:
-        | COMMA datatype IDENT args_tail        { Ast.Arg($2, $3) :: $4 }
         | /* empty */                           { [] }
+        | COMMA datatype_ex IDENT args_tail     { Past.Arg($2, $3) :: $4 }
 ;
 
 app_args:
-        | expr app_args_tail                   { $1 :: $2 }
         | /* empty */                           { [] }
+        | expr app_args_tail                   { $1 :: $2 }
 ;
 
 app_args_tail:
-        | COMMA expr app_args_tail             { $2 :: $3 }
         | /* empty */                           { [] }
+        | COMMA expr app_args_tail             { $2 :: $3 }
 ;
 
 func:
         | datatype IDENT LPAREN args RPAREN LBRACE block RBRACE
-            { Func {
+            { {
                 name = $2; 
                 args = $4;
                 return_type = $1;

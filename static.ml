@@ -16,7 +16,11 @@ let report_s s msg =
     let s_str = string_of_stmt s in 
     complain ("Error at location " ^ loc_str ^ "\n\n" ^ s_str ^ "\n\n" ^ msg)
 
+
 let report_type e = report_e e "Type mismatch"
+
+let type_mismatch e t =
+    complain "Type mismatch!"
 
 let complain_f f = complain ("Argument mismatch in " ^ f)
 
@@ -25,6 +29,8 @@ type binding =
     | Fun of funcsig
 
 type var_env = (string * binding) list list
+
+let init_env = [[]]
 
 let enter_scope env = []::env
 
@@ -53,17 +59,19 @@ let decl_here x env =
         | None -> false
         | Some _ -> true
 
-let make_int_bop loc bop (e1, t1) (e2, t2) =
+let make_int_bop loc bop e1 e2 =
+    let t1 = get_type e1 in let t2 = get_type e2 in
     match t1, t2 with
-    | TInt, TInt -> (Binop(loc, bop, e1, e2), t1)
-    | TInt, t    -> report_type e2
-    | t,    _    -> report_type e1
+    | IntType, IntType -> TBinop(loc, bop, e1, e2, t1)
+    | IntType, t    -> type_mismatch e2 t
+    | t,       _    -> type_mismatch e1 t
 
-let make_bool_bop loc bop (e1, t1) (e2, t2) =
+let make_bool_bop loc bop e1 e2 =
+    let t1 = get_type e1 in let t2 = get_type e2 in
     match t1, t2 with
-    | TBool, TBool -> (Binop(loc, bop, e1, e2), t1)
-    | TBool, t     -> report_type e2
-    | t,     _     -> report_type e1
+    | BoolType, BoolType -> TBinop(loc, bop, e1, e2, t1)
+    | BoolType, t     -> type_mismatch e2 t
+    | t,        _     -> type_mismatch e1 t
 
 let make_bop loc bop e1 e2 = 
     match bop with
@@ -80,21 +88,23 @@ let make_bop loc bop e1 e2 =
     | Lor -> make_bool_bop loc bop e1 e2
     | Land -> make_bool_bop loc bop e1 e2
 
-let make_uop loc uop (e, t) =
+let make_uop loc uop e =
+    let t = get_type e in 
     match uop, t with
-    | Neg, TInt  -> (Unop(loc, uop, e), t)
-    | Neg, t     -> report_type e
-    | Not, TBool -> (Unop(loc, uop, e), t)
-    | Not, t     -> report_type e
+    | Neg, IntType  -> TUnop(loc, uop, e, t)
+    | Neg, t'     -> type_mismatch e t'
+    | Not, BoolType -> TUnop(loc, uop, e, t)
+    | Not, t'     -> type_mismatch e t'
 
-let make_assign loc x (e, t) env = 
+let make_assign loc x e env = 
+    let t = get_type e in
     match lookup x env with
-    | None -> report_e e "Undeclared variable"
+    | None -> complain "Undeclared variable!"
     | Some b -> match b with 
-        | Fun(_) -> report_e e "Assigning to function!" 
+        | Fun(_) -> complain "Assign to function!"
         | Var(t') ->
-            if t = t' then (Assign(loc, x, e), t)
-            else report_type e
+            if t = t' then TAssign(loc, x, e, t)
+            else type_mismatch e t'
 
 
 let rec make_args fargs is = 
@@ -102,19 +112,25 @@ let rec make_args fargs is =
     | [], [] -> true
     | xs, [] -> false
     | [], xs -> false
-    | t::xs, (_, t')::ys -> if t = t' then make_args xs ys else false
+    | t::xs, e::ys -> let t' = get_type e in if t = t' then make_args xs ys else false
+
+let rec check_unique = function 
+    | [] -> ()
+    | Arg(_,x)::xs ->  if List.exists (fun (Arg(_,y)) -> x = y) xs then 
+                        complain "Non-unique argument!"
+                    else check_unique xs
 
 let make_ident loc x e env = 
     match lookup x env with
     | None -> report_e e "Undeclared variable!"
     | Some t -> match t with 
         | Fun(_) -> report_e e "Treating function like variable!"
-        | Var(t') -> (e, t')
+        | Var(t') -> TIdent (loc, x, t')
 
 let rec infer env e = 
     match e with
-    | Int _ -> (e, TInt)
-    | Bool _ -> (e, TBool)
+    | Int  (l, n) -> TInt (l, n, IntType)
+    | Bool (l, b) -> TBool (l, b, BoolType)
     | Ident (loc, x) -> make_ident loc x e env
     | Binop (loc, op, e1, e2) ->
         let i1 = infer env e1 in
@@ -139,58 +155,62 @@ and make_app loc f e env args =
         | Var(_) -> report_e e "Applying to variable!"
         | Fun((fargs, ret)) -> 
             let is = infer_list env args in 
-                if make_args fargs is then (App(loc, f, args), ret)
+                if make_args fargs is then TApp(loc, f, is, ret)
                 else report_e  e "Application parameter mismatch!"
 
 
-let check_decl s t x e env = 
-    match decl_here x env with
-    | true  -> report_s s "Redeclaring variable"
-    | false -> let env = add x (Var t) env in 
-                (match e with
-                | None -> (s, env)
-                | Some e -> 
-                    let (_, t') = infer env e in
-                    if t' = t then (s, env)
-                    else report_s s "Type mismatch!")
+let check_decl loc t x e env = 
+    match e with 
+    | None -> let env = add x (Var t) env in (TDecl(loc, t, x, None), env)
+    | Some e -> 
+        let e' = infer env e in
+        if get_type e' = t then 
+            let env = add x (Var t) env in (TDecl(loc, t, x, Some e'), env) 
+        else type_mismatch e' t
 
 let rec check env s rtype = 
     match s with 
-    | Expr (loc, e) -> let _ = infer env e in (s, env)
+    | Expr (loc, e) -> let e' = infer env e in (TExpr (loc, e'), env)
     | Return (loc, e) -> 
         (match e with 
-        | None -> if rtype = Some TUnit then (s, env)
+        | None -> if rtype = Some UnitType then (TReturn (loc, None), env)
                   else report_s s "Return type mismatch"
-        | Some e -> let (_, t) = infer env e in 
-                    if Some t = rtype then (s, env)
+        | Some e -> let e' = infer env e in 
+                    if Some (get_type e') = rtype then (TReturn(loc, Some e'), env)
                     else report_s s "Return type mismatch")
-    | Decl (loc, t, x, e) -> check_decl s t x e env
-    | If (loc, cond, thenb, elseb) -> check_if s cond thenb elseb env rtype
-    | Func (loc, f) -> check_fun f s env
-    
-
+    | Decl (loc, t, x, e) -> check_decl loc t x e env
+    | If (loc, cond, thenb, elseb) -> check_if loc cond thenb elseb env rtype
+    | Func (loc, f) -> check_fun loc f env
 and check_b env block rtype = 
-    List.fold_left (fun e s ->
-        let (_, e') = check e s rtype in e'
-    ) env block
+    match block with 
+    | [] -> [] 
+    | s::rest -> match check env s rtype with 
+        | (s', env') -> s'::(check_b env' rest rtype)
 
-
-and check_if s cond thenb elseb env rtype = 
-    let (_, t_cond) = infer env cond in 
-    if t_cond <> TBool then report_e cond ("Type error, expected bool!");
+and check_if loc cond thenb elseb env rtype = 
+    let cond' = infer env cond in 
+    if get_type cond' <> BoolType then report_e cond ("Type error, expected bool!");
     let env_then = enter_scope env in 
-    let _ = check_b env_then thenb rtype in
+    let thenb' = check_b env_then thenb rtype in
     match elseb with 
-        | None -> (s, env)
+        | None -> (TIf(loc, cond', thenb', None), env)
         | Some b -> let env_else = enter_scope env in
-                    let _ = check_b env_else b rtype in 
-                    (s, env)
+                    let elseb' = check_b env_else b rtype in 
+                    (TIf(loc, cond', thenb', (Some elseb')), env)
 
-and check_fun f s env = 
+and check_fun loc f env = 
+    check_unique f.args;
     let args = List.map (fun (Arg (t, _)) -> t) f.args in
     let signature = Fun(args, f.return_type) in 
     let env = add f.name signature env in 
     let env' = enter_scope env in 
     let env' = List.fold_left (fun e (Arg (t, x)) -> add x (Var(t)) e) env' f.args in 
-    let _ = check_b env' f.body (Some f.return_type) in (s, env)
+    let body' = check_b env' f.body (Some f.return_type) in 
+    (TFunc(loc, {
+        name = f.name;
+        args = f.args;
+        return_type = f.return_type;
+        body = body';
+    }), env)
 
+let check_program p = check_b init_env p None

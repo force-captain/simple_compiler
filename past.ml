@@ -3,11 +3,13 @@ type var = string
 type loc = Lexing.position
 
 type datatype = 
-    | TInt
-    | TBool
-    | TUnit
+    | IntType
+    | BoolType
+    | UnitType
 
 type funcsig = datatype list * datatype
+
+type arg = Arg of datatype * var
 
 type binop = 
     | Add 
@@ -27,6 +29,31 @@ type unop =
     | Neg 
     | Not
 
+type typed_expr =
+    | TInt of loc * int * datatype 
+    | TBool of loc * bool * datatype 
+    | TIdent of loc * var * datatype 
+    | TBinop of loc * binop * typed_expr * typed_expr * datatype
+    | TUnop of loc * unop * typed_expr * datatype 
+    | TAssign of loc * var * typed_expr * datatype
+    | TApp of loc * var * typed_expr list * datatype
+
+type typed_stmt =
+    | TExpr of loc * typed_expr 
+    | TReturn of loc * typed_expr option
+    | TDecl of loc * datatype * var * typed_expr option 
+    | TIf of loc * typed_expr * typed_block * typed_block option 
+    | TFunc of loc * typed_func
+
+and typed_block = typed_stmt list 
+
+and typed_func = {
+    name: var;
+    args: arg list;
+    return_type: datatype;
+    body: typed_block;
+}
+
 type expr = 
     | Int of loc * int
     | Bool of loc * bool
@@ -36,7 +63,6 @@ type expr =
     | Assign of loc * var * expr
     | App of loc * var * expr list
 
-type arg = Arg of datatype * var
 
 type stmt = 
     | Expr of loc * expr
@@ -53,6 +79,15 @@ and func = {
     return_type: datatype;
     body: block;
 }
+
+let get_type = function 
+    | TInt      (_, _, t) -> t
+    | TBool     (_, _, t) -> t
+    | TIdent    (_, _, t) -> t
+    | TBinop    (_, _, _, _, t) -> t
+    | TUnop     (_, _, _, t) -> t
+    | TAssign   (_, _, _, t) -> t
+    | TApp      (_, _, _, t) -> t
 
 let loc_of_expr = function
     | Int(loc, _)           -> loc
@@ -83,9 +118,9 @@ let mk_con con l =
     in aux (con ^ "(") l
 
 let string_of_type = function
-    | TInt              -> "TInt" 
-    | TBool             -> "TBool" 
-    | TUnit             -> "TUnit"
+    | IntType              -> "TInt" 
+    | BoolType             -> "TBool" 
+    | UnitType             -> "TUnit"
 
 let string_of_uop = function 
     | Neg -> "Neg"
@@ -126,4 +161,3 @@ let rec string_of_stmt = function
         let args_str = mk_con "Args" (List.map (fun (Arg(t,x)) -> x ^ ":" ^ string_of_type t) f.args) in
         mk_con "Fun" [f.name; string_of_type f.return_type; args_str; string_of_block f.body]
 and string_of_block b = mk_con "Block" (List.map string_of_stmt b)
-    
